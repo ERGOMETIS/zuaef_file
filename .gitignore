@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+.env.*
+!.env.example
+cases/
+examples/sample-case/preview/
+examples/sample-case/deliverables/

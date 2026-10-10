@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "open-product-research-agent"
+version = "0.1.0"
+description = "Open, source-backed product and competitor research with native PydanticAI Harness"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Open Product Research contributors"}]
+keywords = ["agent", "competitive-intelligence", "pydantic-ai", "research", "report"]
+classifiers = ["License :: OSI Approved :: MIT License", "Programming Language :: Python :: 3", "Topic :: Scientific/Engineering :: Information Analysis"]
+dependencies = [
+  "pydantic-ai>=2.55,<2.56",
+  "pydantic-ai-harness[researcher]>=0.55,<0.56",
+  "httpx>=0.28,<1",
+  "beautifulsoup4>=4.12",
+  "pillow>=10",
+  "mistune>=3,<4",
+  "reportlab>=4.2",
+  "pypdf>=5",
+  "pypdfium2>=4.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.8", "hatchling>=1.27"]
+
+[project.scripts]
+product-research = "open_product_research.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/open_product_research"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
