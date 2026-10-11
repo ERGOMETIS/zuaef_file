@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .capability import make_product_research_capability
+from .web_tools import make_local_fetch, make_local_search
 
 
 def build_agent(model: str, case_dir: str | Path):
@@ -20,9 +21,9 @@ def build_agent(model: str, case_dir: str | Path):
         capabilities=[
             LocalWorkspace(str(case_dir)),
             FileSystem(tools=["read_file", "write_file", "edit_file", "list_directory"],
-                       content_hashes=False),
-            WebSearch(local="duckduckgo"),
-            WebFetch(local=True),
+                       content_hashes=False, max_retries=5),
+            WebSearch(local=make_local_search()),
+            WebFetch(local=make_local_fetch()),
             make_product_research_capability(case_dir),
         ],
     )

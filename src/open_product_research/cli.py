@@ -39,6 +39,7 @@ def init_case(path: Path, lead: str, market: str, goal: str) -> Path:
 
 async def execute(path: Path, model: str, *, request_limit: int = 45) -> None:
     from pydantic_ai import UsageLimits
+    from pydantic_ai.exceptions import UsageLimitExceeded
     from .agent import build_agent
     path = path.resolve()
     agent = build_agent(model, path)
@@ -46,10 +47,70 @@ async def execute(path: Path, model: str, *, request_limit: int = 45) -> None:
               "as you work. Cite source URLs and retain unknowns. "
               "Use authentic images only after matching the visible model and SKU. "
               "Stop when the report makes a useful business decision.")
-    outcome = await agent.run(prompt, usage_limits=UsageLimits(request_limit=request_limit))
-    print(str(outcome.output)[:2000])
+    # Cheap models narrate instead of acting: they end turns without tool calls
+    # (PydanticAI treats that as completion) and they happily fetch for twenty
+    # requests without ever writing a file. Both shapes land in the same place
+    # — no report.md — so one loop handles them: keep the SAME conversation and
+    # order a hard deliverable-first action until the file exists or the
+    # attempt budget runs out. Never claim a result we do not have.
+    nudge = ("STOP narrating. Your FIRST tool call this turn must be write_file "
+             "saving report.md with everything researched so far — imperfect is "
+             "fine, facts first. Then write_file evidence.md. After both files "
+             "exist, keep improving them with further research.")
+    continue_nudge = (
+        "report.md exists but is a SKELETON with empty placeholder sections. "
+        "This turn: fill EVERY section of report.md with the researched facts "
+        "(you already have the SKU catalog — use it), then write evidence.md "
+        "listing each source URL, visit date and the exact claim it supports. "
+        "Do not stop until both files are complete documents."
+    )
+
+    def deliverables_ready() -> bool:
+        report = path / "report.md"
+        evidence = path / "evidence.md"
+        if not (report.is_file() and evidence.is_file()):
+            return False
+        text = report.read_text(encoding="utf-8")
+        hollow = ("provisional working document", "populated from inspected pages",
+                  "*(Lineup", "*(EU EPAC", "*(Dutch price")
+        return len(text) >= 4_000 and not any(marker in text for marker in hollow)
+
+    outcome = None
+    last_error: Exception | None = None
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        try:
+            if outcome is None:
+                first = continue_nudge if (path / "report.md").is_file() else prompt
+                outcome = await agent.run(first, usage_limits=UsageLimits(request_limit=request_limit))
+            else:
+                outcome = await agent.run(
+                    continue_nudge if (path / "report.md").is_file() else nudge,
+                    message_history=outcome.all_messages(),
+                    usage_limits=UsageLimits(request_limit=request_limit),
+                )
+            last_error = None
+        except UsageLimitExceeded as exc:
+            last_error = exc
+        except Exception as exc:  # noqa: BLE001 — e.g. tool retry exhaustion
+            if deliverables_ready():
+                # The model kept polishing after the deliverables were already
+                # complete and tripped over its own feet. Ship what we have.
+                print(f"run interrupted after deliverables complete: {type(exc).__name__}",
+                      file=sys.stderr)
+                break
+            raise
+        if deliverables_ready():
+            break
+        reason = type(last_error).__name__ if last_error else "deliverables incomplete"
+        print(f"attempt {attempt + 1}/{max_attempts}: {reason}; continuing", file=sys.stderr)
+    if outcome is not None:
+        print(str(outcome.output)[:2000])
     if not (path / "report.md").is_file():
-        raise RuntimeError("The model returned without saving report.md. No report will be claimed.")
+        detail = f": {last_error}" if last_error else ""
+        raise RuntimeError(
+            "The model returned without saving report.md. No report will be claimed." + detail
+        )
 
 
 def main() -> None:
