@@ -7,7 +7,7 @@ import socket
 
 import pytest
 
-from open_product_research import acquisition
+from open_product_research import polite_http, web_security
 from open_product_research.acquisition import (
     Crawl4AIProvider,
     FetchResult,
@@ -15,12 +15,12 @@ from open_product_research.acquisition import (
     ShopifyJsonProvider,
     build_acquirer,
 )
-from open_product_research import web_security
+from open_product_research.polite_http import PoliteSession, reset_default_session
 from open_product_research.web_security import UnsafeUrlError
 
 
 def _fake_getaddrinfo(*addresses: str):
-    def fake(host, port, /, **kwargs):  # noqa: ANN001
+    def fake(host, port, /, **kwargs):
         return [
             (socket.AF_INET if ":" not in addr else socket.AF_INET6, socket.SOCK_STREAM, 6, "", (addr, 0))
             for addr in addresses
@@ -30,10 +30,11 @@ def _fake_getaddrinfo(*addresses: str):
 
 
 class _FakeResponse:
-    def __init__(self, text: str, url: str, status_code: int = 200) -> None:
+    def __init__(self, text: str, url: str, status_code: int = 200, headers: dict | None = None) -> None:
         self.text = text
         self.url = url
         self.status_code = status_code
+        self.headers = headers or {"content-type": "text/html"}
 
     def json(self):
         return json.loads(self.text)
@@ -120,16 +121,22 @@ def test_crawl4ai_provider_raises_unavailable_when_extra_missing():
     assert type(excinfo.value).__name__ == "Crawl4AIUnavailable"
 
 
+
+def _fast_session() -> PoliteSession:
+    reset_default_session()
+    return PoliteSession(min_interval=0.0, max_retries=0)
+
+
 # --------------------------------------------------------------------------- #
 # HttpxProvider — SSRF + fetch
 # --------------------------------------------------------------------------- #
 
 
 def test_httpx_provider_blocks_private_url_before_any_request(monkeypatch):
-    monkeypatch.setattr(acquisition.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(polite_http.httpx, "AsyncClient", _FakeAsyncClient)
     monkeypatch.setattr(web_security.socket, "getaddrinfo", _fake_getaddrinfo("127.0.0.1"))
     _FakeAsyncClient.instantiations = 0
-    provider = HttpxProvider(timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None)
+    provider = HttpxProvider(timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None, session=_fast_session())
     with pytest.raises(UnsafeUrlError):
         asyncio.run(provider.fetch("http://localhost/page"))
     # The HTTP client must never be constructed for a blocked URL.
@@ -137,11 +144,11 @@ def test_httpx_provider_blocks_private_url_before_any_request(monkeypatch):
 
 
 def test_httpx_provider_fetches_and_truncates(monkeypatch):
-    monkeypatch.setattr(acquisition.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(polite_http.httpx, "AsyncClient", _FakeAsyncClient)
     monkeypatch.setattr(web_security.socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
     html = "<html><head><title> Demo   Bike </title></head><body>" + "x" * 100_000 + "</body></html>"
     _FakeAsyncClient.response = _FakeResponse(html, "https://example.com/final")
-    provider = HttpxProvider(timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None)
+    provider = HttpxProvider(timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None, session=_fast_session())
     result = asyncio.run(provider.fetch("https://example.com/start"))
     assert result.title == "Demo Bike"
     assert result.final_url == "https://example.com/final"
@@ -150,16 +157,16 @@ def test_httpx_provider_fetches_and_truncates(monkeypatch):
 
 
 def test_httpx_provider_rechecks_final_url_for_ssrf(monkeypatch):
-    monkeypatch.setattr(acquisition.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(polite_http.httpx, "AsyncClient", _FakeAsyncClient)
     resolved: list[str] = ["93.184.216.34", "169.254.169.254"]  # redirect target is metadata
 
-    def getaddrinfo(host, port, /, **kwargs):  # noqa: ANN001
+    def getaddrinfo(host, port, /, **kwargs):
         addr = resolved.pop(0) if resolved else "169.254.169.254"
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (addr, 0))]
 
     monkeypatch.setattr(web_security.socket, "getaddrinfo", getaddrinfo)
     _FakeAsyncClient.response = _FakeResponse("<html></html>", "http://169.254.169.254/")
-    provider = HttpxProvider(timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None)
+    provider = HttpxProvider(timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None, session=_fast_session())
     with pytest.raises(UnsafeUrlError):
         asyncio.run(provider.fetch("https://example.com/"))
 
@@ -171,14 +178,14 @@ def test_httpx_provider_rechecks_final_url_for_ssrf(monkeypatch):
 
 def test_shopify_json_provider_falls_back_for_non_shopify_url():
     stub = _StubAcquirer()
-    provider = ShopifyJsonProvider(stub, timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None)
+    provider = ShopifyJsonProvider(stub, timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None, session=_fast_session())
     result = asyncio.run(provider.fetch("https://brand.example/products/bike"))
     assert stub.calls == ["https://brand.example/products/bike"]
     assert result.markdown == "# stub"
 
 
 def test_shopify_json_provider_uses_json_fast_path(monkeypatch):
-    monkeypatch.setattr(acquisition.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(polite_http.httpx, "AsyncClient", _FakeAsyncClient)
     monkeypatch.setattr(web_security.socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
     payload = {
         "product": {
@@ -196,7 +203,7 @@ def test_shopify_json_provider_uses_json_fast_path(monkeypatch):
         json.dumps(payload), "https://aventon.com/products/level-4.json"
     )
     stub = _StubAcquirer()
-    provider = ShopifyJsonProvider(stub, timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None)
+    provider = ShopifyJsonProvider(stub, timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None, session=_fast_session())
     result = asyncio.run(provider.fetch("https://aventon.com/products/level-4"))
     # JSON fast path served the page — the fallback was never consulted.
     assert stub.calls == []
@@ -210,7 +217,7 @@ def test_shopify_json_provider_uses_json_fast_path(monkeypatch):
 
 
 def test_shopify_json_provider_serves_store_catalog_for_root_url(monkeypatch):
-    monkeypatch.setattr(acquisition.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(polite_http.httpx, "AsyncClient", _FakeAsyncClient)
     monkeypatch.setattr(web_security.socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
     payload = {
         "products": [
@@ -232,7 +239,7 @@ def test_shopify_json_provider_serves_store_catalog_for_root_url(monkeypatch):
         json.dumps(payload), "https://lectricebikes.com/products.json?limit=50"
     )
     stub = _StubAcquirer()
-    provider = ShopifyJsonProvider(stub, timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None)
+    provider = ShopifyJsonProvider(stub, timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None, session=_fast_session())
     result = asyncio.run(provider.fetch("https://lectricebikes.com/"))
     # Catalog fast path served the homepage — the fallback was never consulted.
     assert stub.calls == []
@@ -244,7 +251,7 @@ def test_shopify_json_provider_serves_store_catalog_for_root_url(monkeypatch):
 
 
 def test_httpx_provider_truncates_shopify_page_but_not_others(monkeypatch):
-    monkeypatch.setattr(acquisition.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(polite_http.httpx, "AsyncClient", _FakeAsyncClient)
     monkeypatch.setattr(web_security.socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
     html = (
         "<html><head><title>Level 4</title></head><body><nav>"
@@ -253,7 +260,7 @@ def test_httpx_provider_truncates_shopify_page_but_not_others(monkeypatch):
         + "junk " * 5000
         + "</footer></body></html>"
     )
-    provider = HttpxProvider(timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None)
+    provider = HttpxProvider(timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None, session=_fast_session())
 
     # Shopify page: spec-marker truncation collapses the nav/footer noise.
     _FakeAsyncClient.response = _FakeResponse(html, "https://aventon.com/products/level-4")
@@ -267,3 +274,30 @@ def test_httpx_provider_truncates_shopify_page_but_not_others(monkeypatch):
     _FakeAsyncClient.response = _FakeResponse(html, "https://brand.example/products/level-4")
     result2 = asyncio.run(provider.fetch("https://brand.example/products/level-4"))
     assert result2.markdown == html
+
+
+def test_shopify_json_provider_serves_catalog_for_collections_url(monkeypatch):
+    monkeypatch.setattr(polite_http.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(web_security.socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
+    payload = {
+        "products": [
+            {
+                "title": "SUPER73-S2",
+                "handle": "super73-s2",
+                "product_type": "Bikes",
+                "variants": [{"price": "2995.00"}],
+            }
+        ]
+    }
+    _FakeAsyncClient.response = _FakeResponse(
+        json.dumps(payload), "https://super73.com/products.json?limit=50"
+    )
+    stub = _StubAcquirer()
+    provider = ShopifyJsonProvider(
+        stub, timeout_seconds=5.0, allow_proxy_dns=False, proxy_url=None, session=_fast_session()
+    )
+    result = asyncio.run(provider.fetch("https://super73.com/collections/electric-bikes"))
+    assert stub.calls == []
+    assert "SUPER73-S2" in result.markdown
+    assert "products.json" in result.markdown
+    assert "super73.com/collections/electric-bikes" in result.markdown

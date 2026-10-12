@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from open_product_research.cli import init_case
-from open_product_research.media import public_https_url, save_product_image, find_product_images
+from open_product_research.media import find_product_images, public_https_url, save_product_image
 from open_product_research.render import render_preview, render_report
 
 
@@ -33,6 +33,7 @@ def test_url_rejects_local_hosts(monkeypatch):
 
 def test_image_capture_provenance_without_identity_claim(tmp_path: Path, monkeypatch):
     import io
+
     from open_product_research import media
     output = io.BytesIO()
     Image.new("RGB", (800, 520), (230, 230, 230)).save(output, "PNG")

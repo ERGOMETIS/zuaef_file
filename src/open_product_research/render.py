@@ -1,14 +1,14 @@
 """Deterministic Markdown -> PDF. Doesn't judge the truth of the report."""
 from __future__ import annotations
 
-from datetime import date
 from html import escape
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import pypdfium2
-from pypdf import PdfReader
 import mistune
+import pypdfium2
+from PIL import Image as PILImage
+from pypdf import PdfReader
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
@@ -16,8 +16,15 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.platypus import Image, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from PIL import Image as PILImage
+from reportlab.platypus import (
+    Image,
+    KeepTogether,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 PAGE_W, PAGE_H = A4
 P_WIDTH = PAGE_W - 37 * mm
@@ -177,10 +184,19 @@ def render_report(case_dir: Path, *, source: str = "report.md", filename: str = 
     return {"pdf": str(target), "pages": pages, "embedded_images": images, "links": links}
 
 
-def render_preview(case_dir: Path, *, dpi: int = 115) -> list[str]:
-    target = Path(case_dir).resolve() / "deliverables" / "report.pdf"
+def render_preview(
+    case_dir: Path,
+    *,
+    dpi: int = 115,
+    filename: str = "report.pdf",
+) -> list[str]:
+    target = Path(case_dir).resolve() / "deliverables" / filename
     preview = Path(case_dir).resolve() / "preview"
     preview.mkdir(parents=True, exist_ok=True)
+    # A refreshed report can have fewer pages than the previous run; remove
+    # stale page images so a preview directory never mixes two PDFs.
+    for stale in preview.glob("page-*.png"):
+        stale.unlink()
     output = []
     doc = pypdfium2.PdfDocument(str(target))
     try:
@@ -197,3 +213,73 @@ def render_preview(case_dir: Path, *, dpi: int = 115) -> list[str]:
     finally:
         doc.close()
     return output
+
+
+def render_case(
+    case_dir: Path,
+    *,
+    engine: str | None = None,
+    lang: str = "en",
+    preview: bool = False,
+) -> dict:
+    """Render one case with Typst, HTML, or the legacy Markdown renderer.
+
+    ``engine=None`` selects Typst when the external binary is available and
+    otherwise falls back to the existing ReportLab Markdown path.  The content
+    loader and build-note log are shared by all engines; no renderer treats a
+    successful PDF as a quality score.
+    """
+
+    from .report_data import append_build_notes, load_case_report
+    from .report_typst import find_typst, render_typst
+
+    case_dir = Path(case_dir).expanduser().resolve()
+    if lang not in {"en", "zh"}:
+        raise ValueError("lang must be 'en' or 'zh'")
+    if engine not in {None, "typst", "legacy", "html"}:
+        raise ValueError("engine must be typst, legacy, html, or None")
+
+    bundle = load_case_report(case_dir)
+    selected = engine or ("typst" if find_typst() is not None else "legacy")
+    notes = list(bundle.notes)
+    result: dict = {}
+    pdf_filename = "report.pdf" if lang == "en" else "report-zh.pdf"
+    try:
+        if selected == "typst":
+            result = render_typst(bundle, case_dir, lang=lang)
+            pdf_filename = Path(result["pdf"]).name
+        elif selected == "html":
+            from .report_html import render_html
+
+            result = render_html(bundle, case_dir, lang=lang)
+            if result.get("pdf"):
+                pdf_filename = Path(str(result["pdf"])).name
+        else:
+            # The legacy renderer remains Markdown-first.  It deliberately
+            # keeps its old behavior and only changes the language-specific
+            # output filename so preview can target the produced PDF.
+            result = render_report(case_dir, filename=pdf_filename)
+            result.update({"engine": "legacy", "lang": lang})
+        renderer_notes = result.get("notes")
+        if isinstance(renderer_notes, list):
+            notes.extend(str(item) for item in renderer_notes)
+    except Exception as exc:
+        notes.append(f"render failed: {type(exc).__name__}: {exc}")
+        append_build_notes(case_dir, notes, header=f"engine={selected} lang={lang} failed")
+        raise
+
+    if preview:
+        if not (case_dir / "deliverables" / pdf_filename).is_file():
+            raise FileNotFoundError(
+                f"Preview requested but renderer did not produce a PDF: "
+                f"{case_dir / 'deliverables' / pdf_filename}"
+            )
+        result["preview"] = render_preview(case_dir, filename=pdf_filename)
+
+    notes.append(f"engine={selected} lang={lang}")
+    build_notes = append_build_notes(case_dir, notes, header=f"engine={selected} lang={lang}")
+    result["engine"] = selected
+    result["lang"] = lang
+    result["build_notes"] = str(build_notes)
+    return result
+

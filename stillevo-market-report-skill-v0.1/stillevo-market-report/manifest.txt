@@ -1,0 +1,13 @@
+LICENSE
+README.md
+SKILL.md
+assets/demo-cargo.svg
+assets/demo-city.svg
+assets/demo-trail.svg
+assets/report.css
+examples/demo_report.json
+references/agent-integration.md
+references/content-contract.md
+references/design-guide.md
+requirements.txt
+scripts/build_report.py

@@ -45,8 +45,8 @@ The host renders and visually reviews the final PDF after you save report.md.
 
 def make_product_research_capability(case_dir: str | Path):
     """Instantiate the actual AbstractCapability, importing framework on demand."""
-    from pydantic_ai.capabilities import AbstractCapability
     from pydantic_ai import FunctionToolset
+    from pydantic_ai.capabilities import AbstractCapability
 
     directory = Path(case_dir).expanduser().resolve()
     directory.mkdir(parents=True, exist_ok=True)

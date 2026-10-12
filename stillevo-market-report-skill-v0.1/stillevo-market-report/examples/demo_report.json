@@ -1,0 +1,218 @@
+{
+  "meta": {
+    "title": "E-Bike Product Landscape",
+    "brand": "Northline Mobility (fictional)",
+    "subtitle": "First-pass product mapping | Illustrative layout preview",
+    "region": "US / illustration",
+    "as_of": "2026-10-12",
+    "prepared_by": "STILLEVO  ·  坐驰未来",
+    "status": "DEMO · NOT VERIFIED",
+    "demo": true,
+    "disclaimer": "All brand, models, prices and sources are fictional layout-test examples."
+  },
+  "summary": {
+    "lead": "这是一份排版演示，展示如何将产品清单、价格、参数、图片与证据来源组织为容易阅读的研究报告。以下内容均为虚构示例，不能用于商业决策。",
+    "findings": [
+      "三个示例车型覆盖城市通勤、载货与轻越野三种定位。",
+      "每款产品保留独立价格信息、观察日期、规格字段及引用来源。",
+      "未核验事项独立列出，避免把猜测写成确定结论。"
+    ],
+    "scope": "仅演示报告结构和视觉层次；不进行真实品牌研究、不访问网站、不验证示例价格，也不代表任何在售产品。"
+  },
+  "products": [
+    {
+      "name": "N1 City",
+      "category": "Urban commuter",
+      "positioning": "示例城市通勤车型，以日常骑行与便携性作为展示维度。该定位仅用于版面测试。",
+      "price": {
+        "display": "$1,899",
+        "source_ids": [
+          "S01"
+        ],
+        "note": "Illustrative US price · demo only · 2026-10-12"
+      },
+      "image": "../assets/demo-city.svg",
+      "image_credit": "Fictional vector drawing · DEMO",
+      "specs": [
+        {
+          "label": "Motor",
+          "value": "250 W nominal (fictional)",
+          "source_ids": [
+            "S01"
+          ]
+        },
+        {
+          "label": "Battery",
+          "value": "400 Wh (fictional)",
+          "source_ids": [
+            "S01"
+          ]
+        },
+        {
+          "label": "Assistance",
+          "value": "Up to 25 km/h (fictional)",
+          "source_ids": [
+            "S01"
+          ]
+        },
+        {
+          "label": "Brakes",
+          "value": "Hydraulic disc (fictional)",
+          "source_ids": [
+            "S01"
+          ]
+        },
+        {
+          "label": "Weight",
+          "value": "待核验",
+          "source_ids": [
+            "S01"
+          ]
+        }
+      ],
+      "notes": [
+        "产品尺寸、轮径和净重尚未核实。",
+        "此产品、图片和参数均为虚构，不可作为客户资料引用。"
+      ],
+      "source_ids": [
+        "S01"
+      ]
+    },
+    {
+      "name": "N2 Cargo",
+      "category": "Utility / cargo",
+      "positioning": "示例载货车型，以货架、续航和车架配置作为比较项。仅供演示。",
+      "price": {
+        "display": "$2,499",
+        "source_ids": [
+          "S02"
+        ],
+        "note": "Illustrative US price · demo only · 2026-10-12"
+      },
+      "image": "../assets/demo-cargo.svg",
+      "image_credit": "Fictional vector drawing · DEMO",
+      "specs": [
+        {
+          "label": "Motor",
+          "value": "500 W (fictional)",
+          "source_ids": [
+            "S02"
+          ]
+        },
+        {
+          "label": "Battery",
+          "value": "600 Wh (fictional)",
+          "source_ids": [
+            "S02"
+          ]
+        },
+        {
+          "label": "Payload",
+          "value": "待核验",
+          "source_ids": [
+            "S02"
+          ]
+        },
+        {
+          "label": "Drive",
+          "value": "Chain (fictional)",
+          "source_ids": [
+            "S02"
+          ]
+        },
+        {
+          "label": "Accessories",
+          "value": "Rear cargo rack (fictional)",
+          "source_ids": [
+            "S02"
+          ]
+        }
+      ],
+      "notes": [
+        "载重数据没有核实，不应自行补齐。",
+        "实际市场中的产品须使用授权实拍图或官方产品图。"
+      ],
+      "source_ids": [
+        "S02"
+      ]
+    },
+    {
+      "name": "N3 Trail",
+      "category": "Leisure / trail",
+      "positioning": "示例休闲轻越野车型，展示产品档案页如何承载长标题和规格表格。",
+      "price": {
+        "display": "待核验",
+        "source_ids": [
+          "S03"
+        ],
+        "note": "No verified price in this fictional example"
+      },
+      "image": "../assets/demo-trail.svg",
+      "image_credit": "Fictional vector drawing · DEMO",
+      "specs": [
+        {
+          "label": "Motor",
+          "value": "待核验",
+          "source_ids": [
+            "S03"
+          ]
+        },
+        {
+          "label": "Battery",
+          "value": "待核验",
+          "source_ids": [
+            "S03"
+          ]
+        },
+        {
+          "label": "Suspension",
+          "value": "Front (fictional)",
+          "source_ids": [
+            "S03"
+          ]
+        },
+        {
+          "label": "Tires",
+          "value": "Wide profile (fictional)",
+          "source_ids": [
+            "S03"
+          ]
+        }
+      ],
+      "notes": [
+        "演示如何处理尚未证实的价格和关键规格。"
+      ],
+      "source_ids": [
+        "S03"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "S01",
+      "title": "Fictional city model page",
+      "url": "https://example.com/demo/n1-city",
+      "accessed": "2026-10-12",
+      "note": "Reserved example domain; not a real source"
+    },
+    {
+      "id": "S02",
+      "title": "Fictional cargo model page",
+      "url": "https://example.com/demo/n2-cargo",
+      "accessed": "2026-10-12",
+      "note": "Reserved example domain; not a real source"
+    },
+    {
+      "id": "S03",
+      "title": "Fictional trail model page",
+      "url": "https://example.com/demo/n3-trail",
+      "accessed": "2026-10-12",
+      "note": "Reserved example domain; not a real source"
+    }
+  ],
+  "open_questions": [
+    "真实车型页面是否能提供与目标销售区域一致的 MSRP？",
+    "每款车型的轮径、电机参数、续航测试条件和净重是否可核实？",
+    "是否已获取可用于客户报告的官方图片及使用许可？"
+  ]
+}

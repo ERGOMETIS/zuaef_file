@@ -16,6 +16,7 @@ Two hard contracts inherited from the ported layer:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from pydantic_ai.tools import Tool
@@ -45,10 +46,29 @@ def make_local_search(provider: SearchProvider | None = None) -> Tool[Any]:
     )
 
 
-def make_local_fetch(acquirer: WebAcquirer | None = None) -> Tool[Any]:
+def make_local_fetch(
+    acquirer: WebAcquirer | None = None,
+    *,
+    case_dir: str | Path | None = None,
+) -> Tool[Any]:
     """``web_fetch`` local fallback: SPA-capable acquisition chain with SSRF
-    pre/post checks, Shopify /products.json fast path and content truncation."""
-    resolved = acquirer or build_acquirer("auto")
+    pre/post checks, Shopify /products.json fast path, polite pacing and
+    content truncation."""
+    from pathlib import Path as _Path
+
+    if acquirer is not None:
+        resolved = acquirer
+    elif case_dir is not None:
+        log_path = _Path(case_dir).expanduser().resolve() / "fetch_log.jsonl"
+        resolved = build_acquirer("auto", fetch_log_path=log_path)
+        # Keep image downloads on the same polite session / log.
+        from . import media as _media
+
+        session = getattr(resolved, "session", None)
+        if session is not None:
+            _media.set_media_session(session)
+    else:
+        resolved = build_acquirer("auto")
 
     async def web_fetch_local(url: str) -> dict[str, str]:
         try:

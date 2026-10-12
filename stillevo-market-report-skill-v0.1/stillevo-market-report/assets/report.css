@@ -1,0 +1,95 @@
+@page {
+  size: A4 portrait;
+  margin: 19mm 18mm 19mm 18mm;
+  @top-left { content: "STILLEVO   /   MARKET INTELLIGENCE"; color: #6e7b84; font-family: "Inter", "Noto Sans", sans-serif; font-weight: 650; letter-spacing: 0.12em; font-size: 8px; }
+  @top-right { content: string(brandname); color: #859198; font-size: 8px; }
+  @bottom-left { content: "RESEARCH BRIEF  ·  PUBLIC SOURCES"; color: #849099; font-size: 8px; letter-spacing: .08em; }
+  @bottom-right { content: counter(page, decimal-leading-zero); color: #556875; font-size: 9px; font-weight: 700; }
+}
+@page cover {
+  margin: 0;
+  background: #152532;
+  @top-left { content: none; }
+  @top-right { content: none; }
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+* { box-sizing: border-box; }
+html { font-size: 11px; }
+body { string-set: brandname attr(data-brand); margin: 0; color: #263640; background: white; font-family: "Inter", "Noto Sans CJK SC", "Noto Sans", sans-serif; line-height: 1.65; }
+h1,h2,h3,p { margin-top: 0; }
+h2 { letter-spacing: -.035em; }
+a { color: #3b626d; text-decoration: none; }
+.page-section { break-before: page; }
+.cover { page: cover; background: #152532; height: 297mm; padding: 27mm 24mm 21mm; position: relative; color: #f1f5f6; overflow: hidden; }
+.cover .topline { display: flex; justify-content: space-between; align-items: flex-start; border-top: 2px solid #b1cbc9; padding-top: 15px; }
+.wordmark { font-size: 15px; font-weight: 760; letter-spacing: .17em; line-height: 1.3; }
+.wordmark small { display: block; font-size: 8px; font-weight: 500; letter-spacing: .22em; color: #b5c8ca; padding-top: 6px; }
+.cover .serial { text-align: right; font-size: 9px; color: #bacbd0; letter-spacing: .07em; }
+.cover .eyebrow { margin-top: 30mm; font-size: 10px; font-weight: 650; letter-spacing: .20em; color: #b4cdcd; text-transform: uppercase; }
+.cover h1 { font-size: 36px; line-height: 1.13; font-weight: 670; letter-spacing: -.06em; max-width: 142mm; margin: 13px 0 17px; }
+.cover .sub { color: #d5e0e3; font-size: 13px; max-width: 123mm; }
+.cover .photo { width: 145mm; height: 92mm; margin-top: 9mm; position: relative; background: #273b48; border-radius: 4px; overflow: hidden; }
+.cover .photo img { width: 100%; height: 100%; object-fit: contain; padding: 2mm; }
+.cover .photo .tile-label { position: absolute; bottom: 10px; left: 14px; background: #152532; font-size: 8px; letter-spacing: .14em; padding: 5px 9px; color: #d2e0e0; }
+.cover .bottomline { position: absolute; bottom: 19mm; left: 24mm; right: 24mm; border-top: 1px solid #5a707b; padding-top: 11px; display: flex; justify-content: space-between; font-size: 9px; color: #ccdcdf; }
+.status { display: inline-block; padding: 3px 10px; font-size: 9px; font-weight: 700; letter-spacing: .08em; border: 1px solid #9db2ba; color: #d2e0e0; border-radius: 2px; }
+.section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; border-bottom: 1px solid #bac7ca; padding-bottom: 13px; margin-bottom: 23px; }
+.section-kicker { font-size: 9px; letter-spacing: .16em; font-weight: 750; color: #667f89; text-transform: uppercase; margin-bottom: 8px; }
+.section-head h2 { font-size: 25px; white-space: nowrap; line-height: 1.16; margin-bottom: 0; color: #172936; font-weight: 690; }
+.section-aside { font-size: 9px; text-align: right; color: #71818b; }
+.lead { font-size: 15px; line-height: 1.72; color: #233643; margin-bottom: 21px; padding-right: 13mm; }
+.metrics { display: flex; gap: 10px; margin: 16px 0 24px; }
+.metric { flex: 1; background: #f0f4f4; border-top: 2px solid #6f8f95; padding: 13px 15px 12px; min-height: 70px; }
+.metric b { display: block; color: #18303e; font-size: 24px; font-weight: 670; line-height: 1.25; }
+.metric span { font-size: 9px; color: #637781; letter-spacing: .045em; }
+.content-grid { display: flex; gap: 9mm; align-items: flex-start; }
+.content-grid > div { flex: 1; min-width: 0; }
+.mini-heading { font-size: 10px; font-weight: 750; letter-spacing: .12em; color: #59717c; margin-bottom: 10px; text-transform: uppercase; }
+.finding { border-bottom: 1px solid #e0e5e7; padding: 9px 0 11px; line-height: 1.6; font-size: 12px; }
+.finding strong { color: #849aa0; display: inline-block; width: 23px; }
+.scope { background: #edf1f2; padding: 16px 17px; font-size: 11px; color: #546671; line-height: 1.75; }
+.scope b { display:block; font-size: 9px; letter-spacing: .14em; margin-bottom: 8px; color: #3c5560; }
+.product-hero { display: flex; gap: 17px; margin-top: 18px; margin-bottom: 20px; align-items: stretch; }
+.product-photo { flex: 1.45; height: 71mm; border: 1px solid #dde6e8; background: #eff3f3; position:relative; display: flex; align-items:center; justify-content:center; }
+.product-photo img { display:block; width: 100%; height:100%; object-fit:contain; padding: 9px; }
+.product-photo small { position:absolute; bottom:9px; left:10px; display:inline-block; font-size:8px; color:#65808a; background:#f7f9f9; padding:3px 6px; }
+.product-price { flex: .75; background: #192f3e; color: white; padding: 17px 16px; position: relative; }
+.price-label { color:#acc4c7; font-size: 9px; text-transform:uppercase; letter-spacing:.12em; }
+.product-price strong { display:block; font-size: 25px; letter-spacing:-.035em; font-weight:650; margin: 8px 0 8px; line-height:1.2; }
+.product-price p { font-size: 9px; color:#c3d3d7; line-height:1.55; }
+.source-chips { margin-top: 9px; }
+.chip { font-size:8px; display: inline-block; border:1px solid #b5c8cd; padding:1px 5px; margin-right:4px; margin-bottom:4px; border-radius:3px; color:#536f79; white-space:nowrap; }
+.product-price .chip { color:#d7e5e8; border-color:#718c94; }
+.product-intro { color:#455c68; font-size: 12px; line-height:1.7; padding: 6px 0 14px; }
+.specs { border-top:2px solid #476a74; width:100%; border-collapse: collapse; font-size: 12px; }
+.specs tr { break-inside:avoid; }
+.specs td { border-bottom: 1px solid #dfe6e8; padding: 8px 7px; vertical-align:top; }
+.specs td:first-child { width: 27%; font-weight: 650; color:#627882; }
+.specs td:nth-child(2) { width: 58%; color:#263b48; }
+.specs td:last-child { text-align:right; width:15%; }
+.product-footer { margin-top:16px; display:flex; gap:15px; }
+.product-footer > div { flex:1; min-width:0; }
+.product-footer .caption { color:#6d8089; font-size:9px; line-height:1.55; }
+.notes { background:#eef2f3; padding:14px 15px; font-size:11px; }
+.notes .note { margin:0 0 7px; }
+.notes .note:last-child { margin:0; }
+.table-wrap { overflow: visible; }
+.compare { border-collapse: collapse; width:100%; table-layout:fixed; margin-top:17px; font-size: 12px; }
+.compare th { text-align:left; color:#edf3f4; background:#203746; padding:11px 10px; font-size:9px; letter-spacing:.03em; font-weight:650; }
+.compare th:first-child { width:36%; }
+.compare th:nth-child(2) { width:25%; }
+.compare th:nth-child(3) { width:39%; }
+.compare td { padding:12px 10px; border-bottom:1px solid #dbe4e7; vertical-align:top; overflow-wrap:anywhere; }
+.compare tr:nth-child(even) td { background:#f2f5f5; }
+.compare .model { color:#1c3645; font-weight:700; }
+.disclaimer { margin-top:16px; color:#6f818a; font-size:9px; line-height:1.7; }
+.source-entry { padding: 11px 0 14px; border-bottom: 1px solid #dce4e6; break-inside:avoid; }
+.source-entry .id { display:inline-block; font-size:10px; color:#36616f; font-weight:750; min-width:40px; }
+.source-entry .title { color:#233744; font-weight:650; font-size:12px; }
+.source-entry .url { display:block; padding-left:40px; font-size:10px; overflow-wrap:anywhere; }
+.source-entry .accessed { color:#7c8b93; font-size:9px; padding-left:40px; }
+.questions { padding-left:17px; color:#415762; font-size:11px; line-height:1.75; }
+.questions li { padding:5px 0; }
+.nothing { border:1px dashed #a6b6bb; padding:17px; color:#7c8b91; font-size:10px; }
+.watermark { font-size:9px; color:#a46c44; text-transform:uppercase; letter-spacing:.10em; margin-top:14px; }

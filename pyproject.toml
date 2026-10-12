@@ -25,6 +25,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+html = ["weasyprint>=62"]
 dev = ["pytest>=8", "ruff>=0.8", "hatchling>=1.27"]
 
 [project.scripts]
@@ -33,8 +34,14 @@ product-research = "open_product_research.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/open_product_research"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/open_product_research/report_contract.md" = "open_product_research/report_contract.md"
+"src/open_product_research/templates/typst/report.typ" = "open_product_research/templates/typst/report.typ"
+"src/open_product_research/templates/html/report.css" = "open_product_research/templates/html/report.css"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+exclude = ["stillevo-market-report-skill-v0.1"]

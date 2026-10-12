@@ -36,10 +36,16 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol, TypedDict
+from urllib.parse import urlsplit
 
-import httpx
-
+from .polite_http import (
+    BROWSER_UA,
+    JSON_ACCEPT,
+    PoliteSession,
+    default_session,
+)
 from .shopify import (
     MAX_CONTENT_CHARS,
     SPEC_SECTION_CHARS,
@@ -51,14 +57,14 @@ from .shopify import (
 )
 from .web_security import assert_public_url
 
-from urllib.parse import urlsplit
-
 log = logging.getLogger(__name__)
 
 # Mirror the legacy behaviour: never hand the model more than this many chars.
 _MAX_CONTENT_CHARS = 80_000
 
-_USER_AGENT = "OpenProductResearchAgent/0.1"
+# Kept as alias so older call sites / docs referring to _USER_AGENT still read
+# as intentional; the polite session supplies the real browser UA.
+_USER_AGENT = BROWSER_UA
 
 
 @dataclass(frozen=True)
@@ -102,28 +108,60 @@ class ShopifyJsonProvider:
         timeout_seconds: float,
         allow_proxy_dns: bool,
         proxy_url: str | None,
+        session: PoliteSession | None = None,
     ) -> None:
         self._fallback = fallback
         self.timeout_seconds = timeout_seconds
         self.allow_proxy_dns = allow_proxy_dns
         self.proxy_url = proxy_url
+        self.session = session or default_session()
 
     async def fetch(self, url: str) -> FetchResult:
         # Only attempt Shopify JSON path for known Shopify domains.
         if not is_shopify_store(url):
             return await self._fallback.fetch(url)
 
-        # Store root / catalog pages: the homepage is the heaviest page on the
-        # store (80K+ chars of nav menus and marketing). The /products.json
-        # endpoint returns the same product facts as a few K of structured
-        # JSON — the ebike-intelligence-radar token-saving experience.
+        # Store root, collections, and explicit catalog URLs: the HTML is the
+        # heaviest page on the store (80K+ chars of nav/marketing). Prefer
+        # /products.json (structured, a few K) before falling back to HTML.
         path = urlsplit(url).path.rstrip("/")
-        if path in {"", "/products.json"}:
+        use_catalog = (
+            path in {"", "/products.json"}
+            or path.startswith("/collections")
+            or path == "/products"
+        )
+        if use_catalog:
             catalog_url = shopify_products_json_url(url)
             if catalog_url:
-                catalog = await self._fetch_store_catalog(catalog_url)
+                catalog = await self._fetch_store_catalog(catalog_url, requested_url=url)
                 if catalog is not None:
                     return catalog
+                # Catalog returned None — if the failure was rate-limit, skip HTML.
+                # Probe the session cache for the catalog URL.
+                cache = getattr(self.session, "_cache", {}) or {}
+                cached = cache.get(catalog_url)
+                if cached is None:
+                    for key, val in cache.items():
+                        if "products.json" in str(key) and cached is None:
+                            # same-store catalog endpoints share host+path prefix
+                            from urllib.parse import urlsplit as _us
+
+                            if _us(key).hostname == _us(catalog_url).hostname:
+                                cached = val
+                                break
+                if cached is not None and cached.status_code in {429, 503}:
+                    log.info("shopify catalog rate-limited for %s; skipping HTML fallback", url)
+                    return FetchResult(
+                        url=url,
+                        final_url=catalog_url,
+                        title="",
+                        markdown=(
+                            f"FETCH FAILED for {url}: HTTP {cached.status_code} on Shopify "
+                            f"catalog `{catalog_url}`. Same-host HTML fallback skipped. "
+                            "Record as evidence gap; retry later."
+                        ),
+                        status_code=cached.status_code,
+                    )
 
         json_url = shopify_single_product_json_url(url)
         if json_url is None:
@@ -132,20 +170,33 @@ class ShopifyJsonProvider:
         try:
             import json as _json
 
+
             normalized = await assert_public_url(json_url, allow_proxy_dns=self.allow_proxy_dns)
-            async with httpx.AsyncClient(
-                follow_redirects=True,
+            response = await self.session.aget(
+                normalized,
                 timeout=self.timeout_seconds,
                 proxy=self.proxy_url,
-                trust_env=False,
-            ) as client:
-                response = await client.get(
-                    normalized,
-                    headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                accept=JSON_ACCEPT,
+            )
+            response.raise_for_status()
+            data = _json.loads(response.text)
+        except Exception as exc:  # noqa: BLE001 — most JSON-path failures fall back
+            # If the JSON endpoint itself was rate-limited, do NOT immediately
+            # hit the HTML page on the same host — that deepens the 429.
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status in {429, 503} or "429" in str(exc) or "503" in str(exc):
+                log.info("shopify json rate-limited for %s; skipping HTML fallback", url)
+                return FetchResult(
+                    url=url,
+                    final_url=json_url,
+                    title="",
+                    markdown=(
+                        f"FETCH FAILED for {url}: HTTP {status or 429} on Shopify JSON "
+                        f"`{json_url}`. Same-host HTML fallback skipped to avoid deepening "
+                        "rate limits. Record as evidence gap; retry later."
+                    ),
+                    status_code=status or 429,
                 )
-                response.raise_for_status()
-                data = _json.loads(response.text)
-        except Exception as exc:  # noqa: BLE001 — any JSON-path failure falls back
             log.debug("shopify json fetch failed for %s (%s); falling back", url, type(exc).__name__)
             return await self._fallback.fetch(url)
 
@@ -186,6 +237,8 @@ class ShopifyJsonProvider:
 
         markdown_parts = [
             f"# {title}",
+            "",
+            f"_Source: Shopify product JSON — `{json_url}`_",
             "",
         ]
         if first_image_url:
@@ -246,7 +299,9 @@ class ShopifyJsonProvider:
             status_code=response.status_code,
         )
 
-    async def _fetch_store_catalog(self, catalog_url: str) -> FetchResult | None:
+    async def _fetch_store_catalog(
+        self, catalog_url: str, *, requested_url: str | None = None
+    ) -> FetchResult | None:
         """Compact SKU/price matrix from the store's /products.json endpoint.
 
         The store homepage weighs 80K+ chars of navigation; this returns a few
@@ -257,18 +312,14 @@ class ShopifyJsonProvider:
 
         try:
             normalized = await assert_public_url(catalog_url, allow_proxy_dns=self.allow_proxy_dns)
-            async with httpx.AsyncClient(
-                follow_redirects=True,
+            response = await self.session.aget(
+                normalized,
                 timeout=self.timeout_seconds,
                 proxy=self.proxy_url,
-                trust_env=False,
-            ) as client:
-                response = await client.get(
-                    normalized,
-                    headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
-                )
-                response.raise_for_status()
-                data = _json.loads(response.text)
+                accept=JSON_ACCEPT,
+            )
+            response.raise_for_status()
+            data = _json.loads(response.text)
         except Exception as exc:  # noqa: BLE001 — any failure falls back
             log.debug("shopify catalog fetch failed (%s); falling back", type(exc).__name__)
             return None
@@ -277,8 +328,13 @@ class ShopifyJsonProvider:
         if not isinstance(products, list) or not products:
             return None
 
+        cite = catalog_url
+        origin = requested_url or catalog_url
         lines = [
             "# Store catalog (fetched from /products.json)",
+            "",
+            f"_Source JSON:_ `{cite}`",
+            f"_Requested page:_ `{origin}`",
             "",
             f"Total products: {len(products)}",
             "",
@@ -316,7 +372,7 @@ class ShopifyJsonProvider:
             len(markdown),
         )
         return FetchResult(
-            url=catalog_url,
+            url=origin,
             final_url=str(response.url),
             title="Store catalog",
             markdown=markdown,
@@ -354,26 +410,24 @@ class HttpxProvider:
         allow_proxy_dns: bool,
         proxy_url: str | None,
         user_agent: str = _USER_AGENT,
+        session: PoliteSession | None = None,
     ) -> None:
         self.timeout_seconds = timeout_seconds
         self.allow_proxy_dns = allow_proxy_dns
         self.proxy_url = proxy_url
         self.user_agent = user_agent
+        self.session = session or default_session()
 
     async def fetch(self, url: str) -> FetchResult:
         # SSRF gate before the network call — same door every provider uses.
         normalized = await assert_public_url(url, allow_proxy_dns=self.allow_proxy_dns)
-        async with httpx.AsyncClient(
-            follow_redirects=True,
+        response = await self.session.aget(
+            normalized,
             timeout=self.timeout_seconds,
             proxy=self.proxy_url,
-            trust_env=False,
-        ) as client:
-            response = await client.get(
-                normalized,
-                headers={"User-Agent": self.user_agent},
-            )
-            response.raise_for_status()
+            headers={"User-Agent": self.user_agent},
+        )
+        response.raise_for_status()
         # Re-check the final URL: the request may have followed a redirect to a
         # private/host-local address the pre-fetch check could not see.
         final_url = await assert_public_url(str(response.url), allow_proxy_dns=self.allow_proxy_dns)
@@ -418,11 +472,13 @@ class Crawl4AIProvider:
         allow_proxy_dns: bool,
         proxy_url: str | None,
         user_agent: str = _USER_AGENT,
+        session: PoliteSession | None = None,
     ) -> None:
         self.timeout_seconds = timeout_seconds
         self.allow_proxy_dns = allow_proxy_dns
         self.proxy_url = proxy_url
         self.user_agent = user_agent
+        self.session = session or default_session()
 
     async def fetch(self, url: str) -> FetchResult:
         # Import lazily: the crawl extra may be absent.
@@ -440,6 +496,10 @@ class Crawl4AIProvider:
 
         # SSRF gate before launching the browser — same door every provider uses.
         normalized = await assert_public_url(url, allow_proxy_dns=self.allow_proxy_dns)
+        # Share the per-host polite gate with httpx fetches so Crawl4AI does not
+        # burst the same brand site the HTTP path just hit.
+        host = (urlsplit(normalized).hostname or "").lower()
+        await self.session._async_gate.wait(host)
 
         browser_kwargs: dict[str, object] = {
             "headless": True,
@@ -535,6 +595,8 @@ def build_acquirer(
     timeout_seconds: float = 30.0,
     allow_proxy_dns: bool = False,
     proxy_url: str | None = None,
+    fetch_log_path: str | Path | None = None,
+    session: PoliteSession | None = None,
 ) -> WebAcquirer:
     """Construct the web acquisition adapter.
 
@@ -549,20 +611,31 @@ def build_acquirer(
     ``proxy_url`` defaults to the standard proxy environment variables
     (HTTP(S)_PROXY / ALL_PROXY); SOCKS proxies are ignored (httpx cannot use
     them).
+
+    ``fetch_log_path`` (optional) enables per-case JSONL logging of every
+    polite HTTP attempt (status, retries, cache hits). One ``PoliteSession``
+    is shared across Shopify / httpx / Crawl4AI so rate limit and in-run
+    cache apply to the whole case.
     """
     if provider not in {"auto", "httpx", "crawl4ai"}:
         raise ValueError(f"unknown acquisition provider: {provider!r}")
+    resolved_session = session or (
+        PoliteSession(fetch_log_path=Path(fetch_log_path) if fetch_log_path else None)
+        if fetch_log_path
+        else default_session()
+    )
     common_kwargs: _ProviderKwargs = {
         "timeout_seconds": timeout_seconds,
         "allow_proxy_dns": allow_proxy_dns,
         "proxy_url": _proxy_from_env() if proxy_url is None else proxy_url,
     }
+    provider_kwargs = {**common_kwargs, "session": resolved_session}
 
     base: WebAcquirer
     if provider == "httpx":
-        base = HttpxProvider(**common_kwargs)
+        base = HttpxProvider(**provider_kwargs)
     elif provider == "crawl4ai":
-        base = Crawl4AIProvider(**common_kwargs)
+        base = Crawl4AIProvider(**provider_kwargs)
     else:
         # auto: try Crawl4AI, fall back silently.
         try:
@@ -572,9 +645,9 @@ def build_acquirer(
                 "provider=auto but the crawl4ai extra is not installed; using HttpxProvider. "
                 "Install with `uv sync --extra crawl` for clean Markdown + JS rendering."
             )
-            base = HttpxProvider(**common_kwargs)
+            base = HttpxProvider(**provider_kwargs)
         else:
-            base = Crawl4AIProvider(**common_kwargs)
+            base = Crawl4AIProvider(**provider_kwargs)
 
     # Wrap every provider with the Shopify JSON fast path.
     # For Shopify product pages, /products/{handle}.json is tried first
@@ -582,7 +655,7 @@ def build_acquirer(
     # URL is not Shopify or the JSON endpoint is unavailable.
     # Zero overhead for non-Shopify URLs (is_shopify_store returns False
     # without any network call).
-    return ShopifyJsonProvider(base, **common_kwargs)
+    return ShopifyJsonProvider(base, **provider_kwargs)
 
 
 __all__ = [

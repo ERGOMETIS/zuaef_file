@@ -9,7 +9,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from .render import render_preview, render_report
+from .emit_research import emit_research_json
+from .render import render_case, render_report
 
 INPUT_TEMPLATE = """# Research request
 
@@ -40,6 +41,7 @@ def init_case(path: Path, lead: str, market: str, goal: str) -> Path:
 async def execute(path: Path, model: str, *, request_limit: int = 45) -> None:
     from pydantic_ai import UsageLimits
     from pydantic_ai.exceptions import UsageLimitExceeded
+
     from .agent import build_agent
     path = path.resolve()
     agent = build_agent(model, path)
@@ -92,7 +94,7 @@ async def execute(path: Path, model: str, *, request_limit: int = 45) -> None:
             last_error = None
         except UsageLimitExceeded as exc:
             last_error = exc
-        except Exception as exc:  # noqa: BLE001 — e.g. tool retry exhaustion
+        except Exception as exc:
             if deliverables_ready():
                 # The model kept polishing after the deliverables were already
                 # complete and tripped over its own feet. Ship what we have.
@@ -113,6 +115,11 @@ async def execute(path: Path, model: str, *, request_limit: int = 45) -> None:
         )
 
 
+def emit_case_json(path: Path, *, force: bool = False) -> dict:
+    """Write stillevo research.json (or research.emitted.json) from Markdown deliverables."""
+    return emit_research_json(path, force=force)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Open, native-Harness product and competitor research")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -125,8 +132,26 @@ def main() -> None:
     run.add_argument("case", type=Path)
     run.add_argument("--model", default=os.environ.get("PYDANTIC_AI_MODEL", ""))
     run.add_argument("--request-limit", type=int, default=45)
-    out = commands.add_parser("render", help="Render existing report.md and optional preview")
+    emit = commands.add_parser(
+        "emit-json",
+        help="Emit stillevo research.json from report.md/evidence.md/unknowns.md (no LLM)",
+    )
+    emit.add_argument("case", type=Path)
+    emit.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite research.json even if a curated file already exists",
+    )
+    out = commands.add_parser("render", help="Render case report (typst/legacy/html)")
     out.add_argument("case", type=Path)
+    out.add_argument(
+        "--engine",
+        choices=("typst", "legacy", "html"),
+        default=None,
+        help="Render engine (default: Typst if available, otherwise legacy ReportLab)",
+    )
+    out.add_argument("--lang", choices=("en", "zh"), default="en",
+                     help="Displayed language and output filename")
     out.add_argument("--preview", action="store_true")
     args = parser.parse_args()
     if args.command == "init":
@@ -144,14 +169,26 @@ def main() -> None:
                 raise
             partial = True
             print(f"Research stopped; preserving partial report: {type(exc).__name__}: {exc}", file=sys.stderr)
+        try:
+            emitted = emit_case_json(args.case, force=False)
+            print(
+                f"emit-json: wrote {emitted['path']} "
+                f"(products={emitted['product_count']} sources={emitted['source_count']}"
+                f"{'; preserved existing research.json' if emitted['skipped_primary'] else ''})",
+                file=sys.stderr,
+            )
+        except FileNotFoundError as exc:
+            print(f"emit-json skipped: {exc}", file=sys.stderr)
         print(json.dumps(render_report(args.case), ensure_ascii=False))
         if partial:
             raise SystemExit(2)
+    elif args.command == "emit-json":
+        if not (args.case / "report.md").is_file():
+            parser.error("No report.md; run research first or pass a completed case.")
+        print(json.dumps(emit_case_json(args.case, force=args.force), ensure_ascii=False))
     elif args.command == "render":
-        print(json.dumps(render_report(args.case), ensure_ascii=False))
-        if args.preview:
-            for f in render_preview(args.case):
-                print(f)
+        result = render_case(args.case, engine=args.engine, lang=args.lang, preview=args.preview)
+        print(json.dumps(result, ensure_ascii=False))
 
 
 if __name__ == "__main__":

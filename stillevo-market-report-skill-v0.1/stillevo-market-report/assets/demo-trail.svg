@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 450" width="760" height="450"><rect width="760" height="450" fill="#edf2f2"/><path d="M 0 382 H 760" stroke="#d1dedf" stroke-width="2"/>
+    <circle cx="193" cy="315" r="93" fill="none" stroke="#253b44" stroke-width="20"/><circle cx="543" cy="315" r="93" fill="none" stroke="#253b44" stroke-width="20"/>
+    <circle cx="193" cy="315" r="8" fill="#283d47"/><circle cx="543" cy="315" r="8" fill="#283d47"/>
+    <path d="M 193 315 L 295 190 L 407 315 Z M 295 190 L 452 189 L 407 315 L 193 315" fill="none" stroke="#68807c" stroke-width="18" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M 452 189 L 543 315" fill="none" stroke="#68807c" stroke-width="17" stroke-linecap="round"/>
+    <path d="M 284 178 H 336" stroke="#203640" stroke-width="11" stroke-linecap="round"/><path d="M 455 189 L 447 146 L 484 135" fill="none" stroke="#263c45" stroke-width="9" stroke-linecap="round"/>
+    <path d="M 466 135 H 515" stroke="#243741" stroke-width="10" stroke-linecap="round"/><path d="M 304 190 L 293 156" stroke="#344851" stroke-width="6"/>
+    <circle cx="407" cy="315" r="21" fill="#354b54"/><path d="M 407 315 L 433 338" stroke="#1a2d37" stroke-width="7"/>
+    <rect x="326" y="202" width="70" height="54" rx="7" fill="#586e75" stroke="#2b434d" stroke-width="4"/>
+    <path d="M 500 242 L 465 373" stroke="#8b9da3" stroke-width="12" />
+    <text x="34" y="45" font-family="sans-serif" font-size="19" letter-spacing="5" fill="#65808a">ILLUSTRATION / DEMO ONLY</text>
+    <text x="40" y="417" font-family="sans-serif" font-size="14" fill="#7c9198">FICTIONAL PRODUCT IMAGE  ·  NOT A REAL MODEL</text></svg>

@@ -15,7 +15,7 @@ from open_product_research.web_security import (
 
 
 def _fake_getaddrinfo(*addresses: str):
-    def fake(host, port, /, **kwargs):  # noqa: ANN001 - signature-compatible stub
+    def fake(host, port, /, **kwargs):
         return [
             (socket.AF_INET if ":" not in addr else socket.AF_INET6, socket.SOCK_STREAM, 6, "", (addr, 0))
             for addr in addresses
@@ -93,7 +93,7 @@ def test_assert_public_url_rejects_private_range(monkeypatch):
 
 
 def test_assert_public_url_rejects_unresolvable_host(monkeypatch):
-    def gaierror(host, port, /, **kwargs):  # noqa: ANN001
+    def gaierror(host, port, /, **kwargs):
         raise socket.gaierror("no such host")
 
     monkeypatch.setattr(web_security.socket, "getaddrinfo", gaierror)
